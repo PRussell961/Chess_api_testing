@@ -1,4 +1,5 @@
 const Chess = require('C:\\Users\\colem\\node_modules\\chess.js').Chess;
+const { Worker, isMainThread, parentPort } = require('worker_threads');
 
 class ChessPositionNode {
   constructor(fen, parent = null) {
@@ -12,40 +13,22 @@ class ChessPositionNode {
     this.children.push(childNode);
   }
 
-  // Generate all possible child nodes
+  // Generate all possible child nodes using worker threads
   generateChildren(depth) {
     if (depth <= 0) {
       return;
     }
 
-    const chess = new Chess(this.fen);
-    const legalMoves = chess.moves();
+    const generateChildrenWorker = require('./chessWorkers'); // Import the worker function
 
-    for (const move of legalMoves) {
-      chess.move(move);
-      const childNode = new ChessPositionNode(chess.fen(), this);
+    const legalMoves = generateChildrenWorker(this.fen, depth);
+
+    for (const fen of legalMoves) {
+      const childNode = new ChessPositionNode(fen, this);
       this.addChild(childNode);
       childNode.generateChildren(depth - 1);
-      chess.undo();
     }
   }
-}
-
-// Function to print the tree structure recursively
-function printTree(node, moveNumber = 1, depth = 0, totalMoves = 0) {
-  const indent = ' '.repeat(depth * 2);
-  console.log(`${indent}${moveNumber}. ${node.fen}`);
-  totalMoves++;
-
-  for (const child of node.children) {
-    totalMoves = printTree(child, moveNumber + 1, depth + 1, totalMoves);
-  }
-
-  if (depth === 0) {
-    console.log(`Total possible moves: ${totalMoves}`);
-  }
-
-  return totalMoves;
 }
 
 //weights for taking the piece
@@ -191,27 +174,34 @@ function minimax(node, depth, isMaximizing, alpha, beta) {
 }
 
 function findBestMove(rootNode, depth) {
-    const chess = new Chess(rootNode.fen);
-    const isMaximizing = chess.turn() === WHITE;
-    let bestMove = null;
-    let bestValue = isMaximizing ? -Infinity : Infinity;
+  const chessInstance = new Chess(rootNode.fen); // Create a new instance here
+  const isMaximizing = chessInstance.turn() === WHITE;
+  let bestMove = null;
+  let bestValue = isMaximizing ? -Infinity : Infinity;
+  let bestFEN = null; // Store the best FEN
 
-    for (const child of rootNode.children) {
-        const currentValue = minimax(child, depth - 1, !isMaximizing, -Infinity, Infinity);
-        if (isMaximizing) {
-            if (currentValue > bestValue) {
-                bestValue = currentValue;
-                bestMove = determineMove(rootNode.fen, child.fen);
-            }
-        } else {
-            if (currentValue < bestValue) {
-                bestValue = currentValue;
-                bestMove = determineMove(rootNode.fen, child.fen);
-            }
-        }
+  for (const child of rootNode.children) {
+    const currentValue = minimax(child, depth - 1, !isMaximizing, -Infinity, Infinity);
+    if (isMaximizing) {
+      if (currentValue > bestValue) {
+        bestValue = currentValue;
+        bestMove = determineMove(rootNode.fen, child.fen);
+        bestFEN = child.fen; // Store the FEN of the best move
+      }
+    } else {
+      if (currentValue < bestValue) {
+        bestValue = currentValue;
+        bestMove = determineMove(rootNode.fen, child.fen);
+        bestFEN = child.fen; // Store the FEN of the best move
+      }
     }
+  }
 
-    return bestMove;
+  // Return both the best move and the FEN
+  return {
+    move: bestMove,
+    fen: bestFEN
+  };
 }
 
 // Example usage:
@@ -223,4 +213,5 @@ rootNode.generateChildren(maxDepth);
 
 // Find the best move
 const bestMove = findBestMove(rootNode, maxDepth);
-console.log(`Best Move: ` + (JSON.stringify(bestMove, null, 2)));
+console.log(`Best Move: ` + (JSON.stringify(bestMove.move, null, 2)));
+console.log(`Best Move FEN: ` + bestMove.fen);
