@@ -1,4 +1,4 @@
-const Chess = require('C:\\Users\\colem\\node_modules\\chess.js').Chess;
+const { Chess } = require('chess.js');
 
 function generateChildrenWorker(fen, depth) {
   const chess = new Chess(fen);
